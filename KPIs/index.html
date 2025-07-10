@@ -2,33 +2,37 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>PDF.js Viewer (Single Page)</title>
+  <title>PDF.js Viewer (Single Page, Sharp, No Scroll)</title>
   <style>
-    body {
+    html, body {
+      height: 100%;
       margin: 0;
-      padding: 10px;
+      padding: 0;
       font-family: sans-serif;
       background: #f9f9f9;
       box-sizing: border-box;
     }
+
     #pdf-container {
+      height: 100vh;
       width: 100vw;
-      height: 80vh;
-      overflow-y: auto;
+      overflow: hidden;
       display: flex;
       justify-content: center;
-      align-items: flex-start;
+      align-items: center;
       background: #fff;
       border: 1px solid #ccc;
-      margin: 0 auto;
     }
+
     #pdf-canvas {
       display: block;
-      width: 100%;
-      height: auto;
       background: #fff;
+      image-rendering: auto;
+      image-rendering: crisp-edges;
+      image-rendering: pixelated;
     }
   </style>
+
   <!-- Load PDF.js from CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.min.js"></script>
 </head>
@@ -36,6 +40,7 @@
   <div id="pdf-container">
     <canvas id="pdf-canvas"></canvas>
   </div>
+
   <script>
     // Helper to get URL parameter
     function getQueryParam(param) {
@@ -61,25 +66,30 @@
         canvas = document.getElementById('pdf-canvas'),
         ctx = canvas.getContext('2d');
 
-    // Responsive rendering: fit width to container
     function renderPage(num) {
       pageRendering = true;
       pdfDoc.getPage(num).then(function(page) {
         var container = document.getElementById('pdf-container');
-        var desiredWidth = container.clientWidth;
-        var viewport = page.getViewport({ scale: 1 });
-        var scale = desiredWidth / viewport.width;
-        viewport = page.getViewport({ scale: scale });
+        var containerHeight = container.clientHeight;
+
+        var unscaledViewport = page.getViewport({ scale: 1 });
+        var scale = containerHeight / unscaledViewport.height;
+
+        var outputScale = window.devicePixelRatio || 1;
+        var viewport = page.getViewport({ scale: scale * outputScale });
 
         canvas.width = viewport.width;
         canvas.height = viewport.height;
+
+        canvas.style.width = (viewport.width / outputScale) + 'px';
+        canvas.style.height = (viewport.height / outputScale) + 'px';
 
         var renderContext = {
           canvasContext: ctx,
           viewport: viewport
         };
-        var renderTask = page.render(renderContext);
 
+        var renderTask = page.render(renderContext);
         renderTask.promise.then(function() {
           pageRendering = false;
           if (pageNumPending !== null) {
@@ -98,13 +108,11 @@
       }
     }
 
-    // Load the PDF
     pdfjsLib.getDocument(pdfUrl).promise.then(function(pdfDoc_) {
       pdfDoc = pdfDoc_;
       renderPage(pageNum);
     });
 
-    // Re-render on window resize for responsiveness
     window.addEventListener('resize', function() {
       if (pdfDoc) queueRenderPage(pageNum);
     });

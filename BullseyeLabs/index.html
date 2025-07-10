@@ -2,149 +2,119 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>PDF.js Viewer with URL Param and Responsive Width</title>
+  <title>Sharp PDF Viewer with Download</title>
   <style>
-    body {
+    html, body {
+      height: 100%;
       margin: 0;
-      padding: 10px;
-      font-family: sans-serif;
+      padding: 0;
       background: #f9f9f9;
-      box-sizing: border-box;
     }
-    #controls {
-      text-align: center;
-      margin-bottom: 10px;
+
+    #controls { /* NEW */
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
     }
+
+    #download-btn { /* NEW */
+      padding: 6px 12px;
+      font-size: 14px;
+      background: #007acc;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
     #pdf-container {
+      height: 100vh;
       width: 100vw;
-      height: 80vh;
-      overflow-y: auto;
       display: flex;
       justify-content: center;
-      align-items: flex-start;
+      align-items: center;
       background: #fff;
-      border: 1px solid #ccc;
-      margin: 0 auto;
+      overflow: hidden;
     }
-    #pdf-canvas {
+
+    canvas {
       display: block;
-      width: 100%;
-      height: auto;
       background: #fff;
-    }
-    #page-info {
-      margin: 0 10px;
-    }
-    button {
-      padding: 4px 12px;
-      font-size: 16px;
     }
   </style>
-  <!-- Load PDF.js from CDN -->
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.min.js"></script>
 </head>
 <body>
-  <div id="controls">
-    <button id="prev-page">Previous</button>
-    <span id="page-info">Page 1 / 1</span>
-    <button id="next-page">Next</button>
+  <div id="controls"> <!-- NEW -->
+    <button id="download-btn">Download PDF</button>
   </div>
+
   <div id="pdf-container">
     <canvas id="pdf-canvas"></canvas>
   </div>
+
   <script>
-    // Helper to get URL parameter
     function getQueryParam(param) {
       const urlParams = new URLSearchParams(window.location.search);
       return urlParams.get(param);
     }
 
-    // Get PDF URL from "pdf" parameter
     var pdfUrl = getQueryParam('pdf');
     if (!pdfUrl) {
       document.body.innerHTML = "<p style='color:red;text-align:center;'>No PDF specified. Use ?pdf=yourfile.pdf in the URL.</p>";
       throw new Error("No PDF specified");
     }
 
-    // Set the workerSrc to the CDN version
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js';
+    // Set the download link (NEW)
+    document.getElementById('download-btn').addEventListener('click', function () {
+      const link = document.createElement('a');
+      link.href = pdfUrl;
+      link.download = pdfUrl.split('/').pop(); // Use filename from URL
+      link.click();
+    });
 
-    var pdfDoc = null,
-        pageNum = 1,
-        pageRendering = false,
-        pageNumPending = null,
-        canvas = document.getElementById('pdf-canvas'),
-        ctx = canvas.getContext('2d');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js';
 
-    // Responsive rendering: fit width to container
+    const canvas = document.getElementById('pdf-canvas');
+    const ctx = canvas.getContext('2d');
+
+    let pdfDoc = null;
+    let pageNum = 1;
+
     function renderPage(num) {
-      pageRendering = true;
       pdfDoc.getPage(num).then(function(page) {
-        // Fit to container width
-        var container = document.getElementById('pdf-container');
-        var desiredWidth = container.clientWidth;
-        var viewport = page.getViewport({ scale: 1 });
-        var scale = desiredWidth / viewport.width;
-        viewport = page.getViewport({ scale: scale });
+        const container = document.getElementById('pdf-container');
+        const containerHeight = container.clientHeight;
+        const unscaledViewport = page.getViewport({ scale: 1 });
 
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
+        const baseScale = containerHeight / unscaledViewport.height;
+        const qualityBoost = 2.5;
+        const scaledViewport = page.getViewport({ scale: baseScale * qualityBoost });
 
-        var renderContext = {
+        canvas.width = scaledViewport.width;
+        canvas.height = scaledViewport.height;
+
+        canvas.style.width = (scaledViewport.width / qualityBoost) + 'px';
+        canvas.style.height = (scaledViewport.height / qualityBoost) + 'px';
+
+        const renderContext = {
           canvasContext: ctx,
-          viewport: viewport
+          viewport: scaledViewport
         };
-        var renderTask = page.render(renderContext);
 
-        renderTask.promise.then(function() {
-          pageRendering = false;
-          if (pageNumPending !== null) {
-            renderPage(pageNumPending);
-            pageNumPending = null;
-          }
-        });
+        page.render(renderContext);
       });
-
-      // Update page counters
-      document.getElementById('page-info').textContent =
-        'Page ' + num + ' / ' + pdfDoc.numPages;
     }
 
-    function queueRenderPage(num) {
-      if (pageRendering) {
-        pageNumPending = num;
-      } else {
-        renderPage(num);
-      }
-    }
-
-    function onPrevPage() {
-      if (pageNum <= 1) return;
-      pageNum--;
-      queueRenderPage(pageNum);
-    }
-
-    function onNextPage() {
-      if (pageNum >= pdfDoc.numPages) return;
-      pageNum++;
-      queueRenderPage(pageNum);
-    }
-
-    document.getElementById('prev-page').addEventListener('click', onPrevPage);
-    document.getElementById('next-page').addEventListener('click', onNextPage);
-
-    // Load the PDF
     pdfjsLib.getDocument(pdfUrl).promise.then(function(pdfDoc_) {
       pdfDoc = pdfDoc_;
-      document.getElementById('page-info').textContent =
-        'Page 1 / ' + pdfDoc.numPages;
       renderPage(pageNum);
     });
 
-    // Re-render on window resize for responsiveness
-    window.addEventListener('resize', function() {
-      if (pdfDoc) queueRenderPage(pageNum);
+    window.addEventListener('resize', () => {
+      if (pdfDoc) renderPage(pageNum);
     });
   </script>
 </body>

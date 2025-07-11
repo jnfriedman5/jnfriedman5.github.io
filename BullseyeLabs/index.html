@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Multi-Page PDF Viewer with Download</title>
   <style>
     html, body {
@@ -68,22 +68,13 @@
       return urlParams.get(param);
     }
 
-    const pdfUrl = getQueryParam('pdf');
+    // Get PDF URL from ?pdf=... or default
+    let pdfUrl = getQueryParam('pdf');
     if (!pdfUrl) {
-      // Hide download button since there's no file to download
-      document.getElementById('download-btn').style.display = 'none';
-    
-      // Show error message inside the viewer area
-      const container = document.getElementById('pdf-container');
-      container.innerHTML = `
-        <div style="text-align: center; padding: 40px; font-size: 18px; color: red;">
-          ⚠️ No PDF specified.<br>
-          Add <code>?pdf=yourfile.pdf</code> to the URL to display a file.
-        </div>
-      `;
-      return; // Stop the rest of the script from running
+      pdfUrl = 'Creative Test.pdf'; // Default fallback file
     }
 
+    // Set up download button
     document.getElementById('download-btn').addEventListener('click', function () {
       const link = document.createElement('a');
       link.href = pdfUrl;
@@ -91,10 +82,12 @@
       link.click();
     });
 
+    // PDF.js worker
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js';
 
     const container = document.getElementById('pdf-container');
 
+    // Load and render all pages
     pdfjsLib.getDocument(pdfUrl).promise.then(pdf => {
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
         pdf.getPage(pageNum).then(page => {
@@ -102,4 +95,28 @@
           const scale = (window.innerWidth * 0.9) / viewport.width;
           const scaledViewport = page.getViewport({ scale });
 
-          con
+          const canvas = document.createElement('canvas');
+          canvas.className = 'pdf-page';
+          canvas.width = scaledViewport.width * window.devicePixelRatio;
+          canvas.height = scaledViewport.height * window.devicePixelRatio;
+          canvas.style.width = `${scaledViewport.width}px`;
+          canvas.style.height = `${scaledViewport.height}px`;
+
+          const context = canvas.getContext('2d');
+          context.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+          const renderContext = {
+            canvasContext: context,
+            viewport: scaledViewport
+          };
+
+          page.render(renderContext);
+          container.appendChild(canvas);
+        });
+      }
+    }).catch(error => {
+      container.innerHTML = `<p style="color: red; font-size: 18px; text-align: center;">⚠️ Failed to load PDF: ${error.message}</p>`;
+    });
+  </script>
+</body>
+</html>

@@ -70,8 +70,10 @@
 
     const pdfUrl = getQueryParam('pdf');
     if (!pdfUrl) {
-      document.body.innerHTML = "<p style='color:red;text-align:center;'>No PDF specified. Use ?pdf=yourfile.pdf in the URL.</p>";
-      throw new Error("No PDF specified");
+      document.getElementById('download-btn').style.display = 'none'; // optional
+      document.getElementById('pdf-container').innerHTML =
+        "<p style='color:red;text-align:center;font-size:18px;'>No PDF specified.<br>Use <code>?pdf=yourfile.pdf</code> in the URL.</p>";
+      return; // stop further execution without throwing
     }
 
     document.getElementById('download-btn').addEventListener('click', function () {

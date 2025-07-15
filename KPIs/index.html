@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Single Page Document Viewer</title>
+  <title>Responsive Document Viewer</title>
   <style>
     html, body {
       height: 100%;
+      width: 100%;
       margin: 0;
       padding: 0;
       font-family: sans-serif;
@@ -14,28 +15,27 @@
     }
 
     #viewer-container {
-      height: 100vh;
-      width: 100vw;
+      height: 100%;
+      width: 100%;
       overflow: hidden;
       display: flex;
       justify-content: center;
       align-items: center;
       background: #fff;
-      border: 1px solid #ccc;
     }
 
     canvas, img {
       display: block;
-      background: #fff;
-      max-height: 100%;
       max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
       image-rendering: auto;
       image-rendering: crisp-edges;
       image-rendering: pixelated;
     }
   </style>
 
-  <!-- Load PDF.js -->
+  <!-- PDF.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.min.js"></script>
 </head>
 <body>
@@ -60,6 +60,7 @@
     const canvas = document.getElementById('pdf-canvas');
     const ctx = canvas.getContext('2d');
     const imageViewer = document.getElementById('image-viewer');
+    const container = document.getElementById('viewer-container');
 
     if (isPDF) {
       canvas.style.display = 'block';
@@ -67,44 +68,40 @@
 
       let pdfDoc = null;
       let pageNum = 1;
-      let pageRendering = false;
 
-      function renderPage(num) {
-        pageRendering = true;
-        pdfDoc.getPage(num).then(function (page) {
-          const container = document.getElementById('viewer-container');
+      function renderPage() {
+        pdfDoc.getPage(pageNum).then(page => {
+          const containerWidth = container.clientWidth;
           const containerHeight = container.clientHeight;
 
-          const unscaledViewport = page.getViewport({ scale: 1 });
-          const scale = containerHeight / unscaledViewport.height;
+          const unscaled = page.getViewport({ scale: 1 });
+          const widthScale = containerWidth / unscaled.width;
+          const heightScale = containerHeight / unscaled.height;
+          const scale = Math.min(widthScale, heightScale);
+
           const outputScale = window.devicePixelRatio || 1;
           const viewport = page.getViewport({ scale: scale * outputScale });
 
           canvas.width = viewport.width;
           canvas.height = viewport.height;
-          canvas.style.width = (viewport.width / outputScale) + 'px';
-          canvas.style.height = (viewport.height / outputScale) + 'px';
+          canvas.style.width = `${viewport.width / outputScale}px`;
+          canvas.style.height = `${viewport.height / outputScale}px`;
 
           const renderContext = {
             canvasContext: ctx,
             viewport: viewport
           };
 
-          page.render(renderContext).promise.then(function () {
-            pageRendering = false;
-          });
+          page.render(renderContext);
         });
       }
 
-      pdfjsLib.getDocument(fileUrl).promise.then(function (pdfDoc_) {
-        pdfDoc = pdfDoc_;
-        renderPage(pageNum);
+      pdfjsLib.getDocument(fileUrl).promise.then(doc => {
+        pdfDoc = doc;
+        renderPage();
       });
 
-      window.addEventListener('resize', function () {
-        if (pdfDoc) renderPage(pageNum);
-      });
-
+      window.addEventListener('resize', renderPage);
     } else {
       imageViewer.style.display = 'block';
       imageViewer.src = fileUrl;

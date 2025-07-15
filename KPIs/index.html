@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>PDF.js Viewer (Single Page, Sharp, No Scroll)</title>
+  <meta charset="UTF-8" />
+  <title>Single Page Document Viewer</title>
   <style>
     html, body {
       height: 100%;
@@ -13,7 +13,7 @@
       box-sizing: border-box;
     }
 
-    #pdf-container {
+    #viewer-container {
       height: 100vh;
       width: 100vw;
       overflow: hidden;
@@ -24,98 +24,92 @@
       border: 1px solid #ccc;
     }
 
-    #pdf-canvas {
+    canvas, img {
       display: block;
       background: #fff;
+      max-height: 100%;
+      max-width: 100%;
       image-rendering: auto;
       image-rendering: crisp-edges;
       image-rendering: pixelated;
     }
   </style>
 
-  <!-- Load PDF.js from CDN -->
+  <!-- Load PDF.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.min.js"></script>
 </head>
 <body>
-  <div id="pdf-container">
-    <canvas id="pdf-canvas"></canvas>
+  <div id="viewer-container">
+    <canvas id="pdf-canvas" style="display: none;"></canvas>
+    <img id="image-viewer" style="display: none;" />
   </div>
 
   <script>
-    // Helper to get URL parameter
     function getQueryParam(param) {
       const urlParams = new URLSearchParams(window.location.search);
       return urlParams.get(param);
     }
 
-    // Get PDF URL from "pdf" parameter
-    var pdfUrl = getQueryParam('pdf');
-    if (!pdfUrl) {
-      document.body.innerHTML = "<p style='color:red;text-align:center;'>No PDF specified. Use ?pdf=yourfile.pdf in the URL.</p>";
-      throw new Error("No PDF specified");
+    const fileUrl = getQueryParam('file');
+    if (!fileUrl) {
+      document.body.innerHTML = "<p style='color:red;text-align:center;'>No file specified. Use ?file=yourfile.pdf or .png</p>";
+      throw new Error("No file specified");
     }
 
-    // Set the workerSrc to the CDN version
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js';
+    const isPDF = fileUrl.toLowerCase().endsWith('.pdf');
+    const canvas = document.getElementById('pdf-canvas');
+    const ctx = canvas.getContext('2d');
+    const imageViewer = document.getElementById('image-viewer');
 
-    var pdfDoc = null,
-        pageNum = 1,
-        pageRendering = false,
-        pageNumPending = null,
-        canvas = document.getElementById('pdf-canvas'),
-        ctx = canvas.getContext('2d');
+    if (isPDF) {
+      canvas.style.display = 'block';
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js';
 
-    function renderPage(num) {
-      pageRendering = true;
-      pdfDoc.getPage(num).then(function(page) {
-        var container = document.getElementById('pdf-container');
-        var containerHeight = container.clientHeight;
+      let pdfDoc = null;
+      let pageNum = 1;
+      let pageRendering = false;
 
-        var unscaledViewport = page.getViewport({ scale: 1 });
-        var scale = containerHeight / unscaledViewport.height;
+      function renderPage(num) {
+        pageRendering = true;
+        pdfDoc.getPage(num).then(function (page) {
+          const container = document.getElementById('viewer-container');
+          const containerHeight = container.clientHeight;
 
-        var outputScale = window.devicePixelRatio || 1;
-        var viewport = page.getViewport({ scale: scale * outputScale });
+          const unscaledViewport = page.getViewport({ scale: 1 });
+          const scale = containerHeight / unscaledViewport.height;
+          const outputScale = window.devicePixelRatio || 1;
+          const viewport = page.getViewport({ scale: scale * outputScale });
 
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          canvas.style.width = (viewport.width / outputScale) + 'px';
+          canvas.style.height = (viewport.height / outputScale) + 'px';
 
-        canvas.style.width = (viewport.width / outputScale) + 'px';
-        canvas.style.height = (viewport.height / outputScale) + 'px';
+          const renderContext = {
+            canvasContext: ctx,
+            viewport: viewport
+          };
 
-        var renderContext = {
-          canvasContext: ctx,
-          viewport: viewport
-        };
-
-        var renderTask = page.render(renderContext);
-        renderTask.promise.then(function() {
-          pageRendering = false;
-          if (pageNumPending !== null) {
-            renderPage(pageNumPending);
-            pageNumPending = null;
-          }
+          page.render(renderContext).promise.then(function () {
+            pageRendering = false;
+          });
         });
-      });
-    }
-
-    function queueRenderPage(num) {
-      if (pageRendering) {
-        pageNumPending = num;
-      } else {
-        renderPage(num);
       }
+
+      pdfjsLib.getDocument(fileUrl).promise.then(function (pdfDoc_) {
+        pdfDoc = pdfDoc_;
+        renderPage(pageNum);
+      });
+
+      window.addEventListener('resize', function () {
+        if (pdfDoc) renderPage(pageNum);
+      });
+
+    } else {
+      imageViewer.style.display = 'block';
+      imageViewer.src = fileUrl;
+      imageViewer.alt = 'Document Image';
     }
-
-    pdfjsLib.getDocument(pdfUrl).promise.then(function(pdfDoc_) {
-      pdfDoc = pdfDoc_;
-      renderPage(pageNum);
-    });
-
-    window.addEventListener('resize', function() {
-      if (pdfDoc) queueRenderPage(pageNum);
-    });
   </script>
 </body>
 </html>

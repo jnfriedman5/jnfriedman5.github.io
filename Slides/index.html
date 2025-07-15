@@ -4,9 +4,11 @@
   <meta charset="UTF-8" />
   <title>Viewer with Pagination or Image Display</title>
   <style>
-    body {
+    html, body {
+      height: 100%;
+      width: 100%;
       margin: 0;
-      padding: 10px;
+      padding: 0;
       font-family: sans-serif;
       background: #f9f9f9;
       box-sizing: border-box;
@@ -14,25 +16,25 @@
 
     #controls {
       text-align: center;
-      margin-bottom: 10px;
+      padding: 10px;
     }
 
     #viewer-container {
-      width: 100vw;
-      height: 80vh;
-      overflow-y: auto;
+      height: calc(100% - 50px);
+      width: 100%;
       display: flex;
       justify-content: center;
-      align-items: flex-start;
+      align-items: center;
+      overflow: auto;
       background: #fff;
-      border: 1px solid #ccc;
-      margin: 0 auto;
+      border-top: 1px solid #ccc;
     }
 
     canvas, img {
       display: block;
       max-width: 100%;
-      height: auto;
+      max-height: 100%;
+      object-fit: contain;
       background: #fff;
     }
 
@@ -78,6 +80,7 @@
     const ctx = canvas.getContext('2d');
     const imageViewer = document.getElementById('image-viewer');
     const controls = document.getElementById('controls');
+    const container = document.getElementById('viewer-container');
 
     if (isPDF) {
       controls.style.display = 'block';
@@ -93,22 +96,28 @@
       function renderPage(num) {
         pageRendering = true;
         pdfDoc.getPage(num).then(function(page) {
-          const container = document.getElementById('viewer-container');
-          const desiredWidth = container.clientWidth;
+          const containerWidth = container.clientWidth;
+          const containerHeight = container.clientHeight;
 
           let viewport = page.getViewport({ scale: 1 });
-          const scale = desiredWidth / viewport.width;
-          viewport = page.getViewport({ scale });
+          const widthScale = containerWidth / viewport.width;
+          const heightScale = containerHeight / viewport.height;
+          const scale = Math.min(widthScale, heightScale); // Fit to smaller dimension
+
+          const outputScale = window.devicePixelRatio || 1;
+          viewport = page.getViewport({ scale: scale * outputScale });
 
           canvas.width = viewport.width;
           canvas.height = viewport.height;
+          canvas.style.width = `${viewport.width / outputScale}px`;
+          canvas.style.height = `${viewport.height / outputScale}px`;
 
           const renderContext = {
             canvasContext: ctx,
             viewport: viewport
           };
-          const renderTask = page.render(renderContext);
 
+          const renderTask = page.render(renderContext);
           renderTask.promise.then(() => {
             pageRendering = false;
             if (pageNumPending !== null) {
@@ -155,7 +164,6 @@
       });
 
     } else {
-      // Display image file
       imageViewer.style.display = 'block';
       imageViewer.src = fileUrl;
       imageViewer.alt = 'Embedded Image';
